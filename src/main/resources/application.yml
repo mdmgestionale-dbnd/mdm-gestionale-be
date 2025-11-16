@@ -1,0 +1,67 @@
+spring:
+  servlet:
+      multipart:
+        max-file-size: 2MB
+        max-request-size: 2MB
+  banner:
+    location: "classpath:banner.txt"
+  application:
+    name: mdm-gestionale-be
+
+  datasource:
+    url: ${DATASOURCE_URL}
+    username: ${DATASOURCE_USERNAME}
+    password: ${DATASOURCE_PASSWORD}
+    driver-class-name: ${DATASOURCE_DRIVER:org.postgresql.Driver}
+    hikari:
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:10}
+      minimum-idle: ${HIKARI_MIN_IDLE:2}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:30000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:600000}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:20000}
+      auto-commit: ${HIKARI_AUTO_COMMIT:true}
+      data-source-properties:
+        cachePrepStmts: ${HIKARI_CACHE_PREP_STMTS:true}
+        prepStmtCacheSize: ${HIKARI_PREP_STMT_CACHE_SIZE:250}
+        prepStmtCacheSqlLimit: ${HIKARI_PREP_STMT_SQL_LIMIT:2048}
+        useServerPrepStmts: ${HIKARI_USE_SERVER_PREP_STMTS:true}
+        prepareThreshold: ${HIKARI_PREPARE_THRESHOLD:5}
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+      default_schema: ${DEFAULT_SCHEMA:public}
+    show-sql: ${SHOW_SQL:false}
+    database-platform: ${HIBERNATE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
+
+  jackson:
+    time-zone: Europe/Rome
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    org:
+     springframework: ${SPRING_LEVEL:INFO}
+    com:
+      db: ${LOG_LEVEL:INFO}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 604800000
+
+app:
+  production: ${IS_PRODUCTION:true}
+  cors:
+    allowed-origins: ${CORS_ALLOWED}
+
+frontend:
+  url: ${FRONTEND_URL}
+
+supabase:
+  s3:
+    bucket: ${SUPABASE_BUCKET_NAME}
+    endpoint: ${SUPABASE_S3_ENDPOINT}
+    access-key: ${SUPABASE_S3_ACCESS_KEY}
+    secret-key: ${SUPABASE_S3_SECRET_KEY}

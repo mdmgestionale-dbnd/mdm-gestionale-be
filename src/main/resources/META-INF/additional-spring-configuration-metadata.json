@@ -1,0 +1,77 @@
+{"properties": [
+  {
+    "name": "spring.jpa.hibernate.default_schema",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.jpa.hibernate.default_schema'"
+  },
+  {
+    "name": "jwt.secret",
+    "type": "java.lang.String",
+    "description": "A description for 'jwt.secret'"
+  },
+  {
+    "name": "jwt.expiration",
+    "type": "java.lang.String",
+    "description": "A description for 'jwt.expiration'"
+  },
+  {
+    "name": "app.cors.allowed-origin",
+    "type": "java.lang.String",
+    "description": "A description for 'app.cors.allowed-origin'"
+  },
+  {
+    "name": "frontend.url",
+    "type": "java.lang.String",
+    "description": "A description for 'frontend.url'"
+  },
+  {
+    "name": "app.cors.allowed-origins",
+    "type": "java.lang.String",
+    "description": "A description for 'app.cors.allowed-origins'"
+  },
+  {
+    "name": "app.images.path",
+    "type": "java.lang.String",
+    "description": "A description for 'app.images.path'"
+  },
+  {
+    "name": "app.images.path",
+    "type": "java.lang.String",
+    "description": "A description for 'app.images.path'"
+  },
+  {
+    "name": "app.images.path",
+    "type": "java.lang.String",
+    "description": "A description for 'app.images.path'"
+  },
+  {
+    "name": "app.images.path",
+    "type": "java.lang.String",
+    "description": "A description for 'app.images.path'"
+  },
+  {
+    "name": "app.production",
+    "type": "java.lang.String",
+    "description": "A description for 'app.production'"
+  },
+  {
+    "name": "supabase.s3.bucket",
+    "type": "java.lang.String",
+    "description": "A description for 'supabase.s3.bucket'"
+  },
+  {
+    "name": "supabase.s3.endpoint",
+    "type": "java.lang.String",
+    "description": "A description for 'supabase.s3.endpoint'"
+  },
+  {
+    "name": "supabase.s3.access-key",
+    "type": "java.lang.String",
+    "description": "A description for 'supabase.s3.access-key'"
+  },
+  {
+    "name": "supabase.s3.secret-key",
+    "type": "java.lang.String",
+    "description": "A description for 'supabase.s3.secret-key'"
+  }
+]}
