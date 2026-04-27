@@ -24,6 +24,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AssegnazioneVeicolo {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -32,15 +33,10 @@ public class AssegnazioneVeicolo {
     @JoinColumn(name = "assegnazione_id", nullable = false)
     private Assegnazione assegnazione;
 
-    @ManyToOne
+    @ManyToOne(optional = false)
     @JoinColumn(name = "veicolo_id", nullable = false)
     private Veicolo veicolo;
 
-    private String ruolo;
-
-    @Column(columnDefinition = "TEXT")
-    private String note;
-
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 }

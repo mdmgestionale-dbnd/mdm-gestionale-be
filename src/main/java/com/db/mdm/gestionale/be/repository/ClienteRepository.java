@@ -1,13 +1,13 @@
 package com.db.mdm.gestionale.be.repository;
 
 import java.util.List;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
+import org.springframework.data.jpa.repository.JpaRepository;
 import com.db.mdm.gestionale.be.entity.Cliente;
 
-@Repository
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
-    List<Cliente> findByIsDeletedFalse();
-	List<Cliente> findByIsDeletedTrue();
+    List<Cliente> findByIsDeletedFalseOrderByNomeAsc();
+    List<Cliente> findByIsDeletedTrueOrderByNomeAsc();
+    List<Cliente> findAllByOrderByNomeAsc();
+    long countByIsDeletedFalse();
 }

@@ -1,13 +1,12 @@
 package com.db.mdm.gestionale.be.service;
 
 import java.util.List;
-import java.util.Optional;
-
 import com.db.mdm.gestionale.be.entity.Cliente;
 
 public interface ClienteService {
-    Optional<Cliente> findById(Long id);
-    List<Cliente> findAll();
-    Cliente save(Cliente cliente);
-    void deleteById(Long id);
+    Cliente save(Cliente entity);
+    List<Cliente> findAll(boolean includeDeleted);
+    Cliente findById(Long id);
+    void softDelete(Long id);
+    void restore(Long id);
 }

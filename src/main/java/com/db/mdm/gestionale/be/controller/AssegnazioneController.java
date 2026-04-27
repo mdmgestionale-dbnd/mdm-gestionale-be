@@ -1,106 +1,99 @@
 package com.db.mdm.gestionale.be.controller;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.db.mdm.gestionale.be.dto.AssegnazioneDto;
+import com.db.mdm.gestionale.be.dto.AssegnazioneCalendarioDto;
+import com.db.mdm.gestionale.be.dto.AssegnazionePianificazioneRequestDto;
+import com.db.mdm.gestionale.be.dto.DisponibilitaRequestDto;
+import com.db.mdm.gestionale.be.dto.DisponibilitaResponseDto;
 import com.db.mdm.gestionale.be.entity.Allegato;
 import com.db.mdm.gestionale.be.entity.Assegnazione;
-import com.db.mdm.gestionale.be.entity.Utente;
 import com.db.mdm.gestionale.be.service.AssegnazioneService;
 
-import lombok.RequiredArgsConstructor;
-
 @RestController
-@RequestMapping("/api/assegnazioni")
+@RequestMapping("/api/assegnazione")
 @RequiredArgsConstructor
 public class AssegnazioneController {
-
-    private final AssegnazioneService assegnazioneService;
-
-	@GetMapping
-	public List<Assegnazione> getFiltered(@RequestParam(required = true) Long utenteId, @RequestParam(required = true) String date) {
-		LocalDate localDate = LocalDate.parse(date);
-		if (utenteId != null) {
-			return assegnazioneService.getByUtenteAndData(utenteId, localDate);
-		}
-		return null;
-	}
-
+    private final AssegnazioneService service;
 
     @PostMapping
-    public Assegnazione create(@RequestBody AssegnazioneDto dto) {
-        Utente assegnatoDa = (Utente) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        LocalDateTime assegnazioneAt = LocalDateTime.parse(dto.getAssegnazioneAt(), DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        return assegnazioneService.createFromDto(dto, assegnatoDa.getId(), assegnazioneAt);
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
+    public Assegnazione save(@Valid @RequestBody AssegnazionePianificazioneRequestDto request) {
+        return service.createPianificazione(request);
+    }
+
+    @GetMapping
+    @PreAuthorize("isAuthenticated()")
+    public List<AssegnazioneCalendarioDto> findAll(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
+        return service.findCalendario(from, to);
+    }
+
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
+    public List<AssegnazioneCalendarioDto> findDeleted() {
+        return service.findDeleted();
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE','DIPENDENTE')")
+    public ResponseEntity<Assegnazione> findById(@PathVariable Long id) {
+        Assegnazione item = service.findById(id);
+        if (item == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(item);
+    }
+
+    @PostMapping("/availability")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE','DIPENDENTE')")
+    public DisponibilitaResponseDto checkAvailability(@RequestBody DisponibilitaRequestDto request) {
+        return service.checkDisponibilita(request);
     }
 
     @PutMapping("/{id}")
-    public Assegnazione update(@PathVariable Long id, @RequestBody AssegnazioneDto dto) {
-        return assegnazioneService.updateFromDto(id, dto);
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
+    public Assegnazione update(@PathVariable Long id, @Valid @RequestBody AssegnazionePianificazioneRequestDto request) {
+        return service.updatePianificazione(id, request);
     }
 
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
-        assegnazioneService.softDelete(id);
-    }
-    
-    @PutMapping("/{id}/start")
-    public Assegnazione startAssegnazione(@PathVariable Long id) {
-        Utente utenteCorrente = (Utente) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return assegnazioneService.startAssegnazione(id, utenteCorrente.getId());
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.softDelete(id);
+        return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/{id}/end")
-    public Assegnazione endAssegnazione(@PathVariable Long id) {
-        Utente utenteCorrente = (Utente) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return assegnazioneService.endAssegnazione(id, utenteCorrente.getId());
-    }
-    
-    @PostMapping("/{id}/upload-foto")
-    public Allegato uploadFoto(@PathVariable Long id, @RequestPart("file") MultipartFile file) throws Exception {
-        Utente utenteCorrente = (Utente) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return assegnazioneService.uploadFoto(id, file, utenteCorrente.getId());
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
+    public ResponseEntity<Void> restore(@PathVariable Long id) {
+        service.restore(id);
+        return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{id}/foto")
-    public ResponseEntity<byte[]> getFoto(@PathVariable Long id) throws Exception {
-        return assegnazioneService.getFotoFile(id)
-                .orElse(ResponseEntity.notFound().build());
-    }
-    
-    @GetMapping("/report/pdf")
-    public ResponseEntity<byte[]> generaReportPdf(@RequestParam(required = false) String data) throws Exception {
-        LocalDate localDate;
-
-        if (data != null && !data.isEmpty()) {
-            localDate = LocalDate.parse(data);
-        } else {
-            localDate = LocalDate.now();
-        }
-
-        byte[] pdfBytes = assegnazioneService.generaReportPdf(localDate);
-
-        return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=report-assegnazioni-" + localDate + ".pdf")
-                .header("Content-Type", "application/pdf")
-                .body(pdfBytes);
+    @PostMapping(path = "/{id}/allegati", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE','DIPENDENTE')")
+    public Allegato uploadAllegato(@PathVariable Long id, @RequestPart("file") MultipartFile file) throws Exception {
+        return service.uploadAllegato(id, file);
     }
 
+    @PostMapping("/{id}/materiali")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> addMateriale(
+            @PathVariable Long id,
+            @RequestBody AssegnazionePianificazioneRequestDto.MaterialeUsatoDto materiale) {
+        service.addMateriale(id, materiale);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -141,6 +141,20 @@
         <artifactId>url-connection-client</artifactId>
         <version>2.21.26</version>
     </dependency>
+    
+    <!-- PdfBox -->
+	<dependency>
+	  <groupId>org.apache.pdfbox</groupId>
+	  <artifactId>pdfbox</artifactId>
+	  <version>2.0.29</version>
+	</dependency>
+	
+	<!-- imgscalr for image resizing -->
+	<dependency>
+	  <groupId>org.imgscalr</groupId>
+	  <artifactId>imgscalr-lib</artifactId>
+	  <version>4.2</version>
+	</dependency>
 
 	</dependencies>
 

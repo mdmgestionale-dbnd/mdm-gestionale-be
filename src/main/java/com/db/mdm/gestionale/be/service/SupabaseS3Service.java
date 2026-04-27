@@ -8,4 +8,5 @@ public interface SupabaseS3Service {
     String getPublicUrl(String path);
     byte[] downloadFile(String path) throws Exception;
     String getTotalStorageUsagePretty();
+	String uploadBytes(byte[] data, String path, String contentType) throws Exception;
 }

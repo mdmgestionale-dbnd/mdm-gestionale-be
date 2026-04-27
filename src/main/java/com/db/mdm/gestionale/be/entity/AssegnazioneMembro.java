@@ -1,6 +1,5 @@
 package com.db.mdm.gestionale.be.entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
@@ -25,6 +24,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AssegnazioneMembro {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -33,15 +33,10 @@ public class AssegnazioneMembro {
     @JoinColumn(name = "assegnazione_id", nullable = false)
     private Assegnazione assegnazione;
 
-    @ManyToOne
+    @ManyToOne(optional = false)
     @JoinColumn(name = "utente_id", nullable = false)
     private Utente utente;
 
-    private String ruolo;
-
-    @Column(name = "ore_previste", precision = 6, scale = 2)
-    private BigDecimal orePreviste;
-
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 }

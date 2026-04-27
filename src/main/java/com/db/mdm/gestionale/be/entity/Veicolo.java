@@ -1,40 +1,34 @@
 package com.db.mdm.gestionale.be.entity;
 
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Entity
-@Table(name = "veicolo")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "veicolo", indexes = {
+    @Index(name = "idx_veicolo_targa", columnList = "targa")
+})
 public class Veicolo {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(name = "targa", nullable = false, unique = true, length = 20)
     private String targa;
 
+    @Column(name = "marca", length = 100)
     private String marca;
+
+    @Column(name = "modello", length = 100)
     private String modello;
-    private Integer anno;
-
-    @Column(columnDefinition = "TEXT")
-    private String note;
-
-    @Column(nullable = false)
-    private Boolean disponibile = true;
 
     @Column(name = "scadenza_assicurazione")
     private LocalDate scadenzaAssicurazione;
@@ -46,11 +40,24 @@ public class Veicolo {
     private LocalDate scadenzaBollo;
 
     @Column(name = "is_deleted", nullable = false)
-    private Boolean isDeleted = false;
+    private boolean isDeleted = false;
 
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) createdAt = now;
+        if (updatedAt == null) updatedAt = now;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }
+

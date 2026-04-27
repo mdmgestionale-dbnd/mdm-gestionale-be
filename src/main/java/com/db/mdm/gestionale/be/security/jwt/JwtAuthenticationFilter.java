@@ -2,6 +2,7 @@ package com.db.mdm.gestionale.be.security.jwt;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             if (jwt != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 Claims claims = jwtService.extractAllClaims(jwt);
-                String role = claims.get(Constants.CLAIM_ROLE, String.class);
+                String role = normalizeRole(claims.get(Constants.CLAIM_ROLE, String.class));
                 String username = claims.getSubject();
 
                 if (username != null) {
@@ -84,5 +85,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null) {
+            return "";
+        }
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        return normalized.startsWith("ROLE_") ? normalized.substring(5) : normalized;
     }
 }

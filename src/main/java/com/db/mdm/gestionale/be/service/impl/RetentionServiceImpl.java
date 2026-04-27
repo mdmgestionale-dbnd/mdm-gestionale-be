@@ -1,18 +1,15 @@
 package com.db.mdm.gestionale.be.service.impl;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.db.mdm.gestionale.be.entity.Assegnazione;
-import com.db.mdm.gestionale.be.entity.Cliente;
-import com.db.mdm.gestionale.be.entity.Utente;
-import com.db.mdm.gestionale.be.repository.AllegatoRepository;
-import com.db.mdm.gestionale.be.repository.AssegnazioneRepository;
-import com.db.mdm.gestionale.be.repository.ClienteRepository;
-import com.db.mdm.gestionale.be.repository.UtenteRepository;
+import com.db.mdm.gestionale.be.controller.RetentionController.SpaceUsageResponse;
 import com.db.mdm.gestionale.be.service.RetentionService;
 import com.db.mdm.gestionale.be.service.SupabaseS3Service;
 
@@ -23,120 +20,123 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class RetentionServiceImpl implements RetentionService {
 
-    private final AssegnazioneRepository assegnazioneRepository;
-    //private final CommessaRepository commessaRepository;
-    private final ClienteRepository clienteRepository;
-    private final UtenteRepository utenteRepository;
-    private final AllegatoRepository allegatoRepository;
     private final SupabaseS3Service s3Service;
     private final JdbcTemplate jdbcTemplate;
 
-    // Cancellazione hard assegnazioni (giornaliere)
     @Override
-    public int cleanupAssegnazioni() {
-//    	LocalDateTime cutoff = LocalDate.now().atStartOfDay();
-//    	List<Assegnazione> toDelete = assegnazioneRepository
-//                .findByIsDeletedTrueOrAssegnazioneAtBefore(cutoff);
-//
-//        int count = 0;
-//        for (Assegnazione a : toDelete) {
-//            Allegato allegato = a.getFotoAllegato();
-//            if (allegato != null) {
-//                try {
-//                    s3Service.deleteFile(allegato.getStoragePath());
-//                } catch (Exception e) {
-//                    System.err.println("Errore cancellazione file storage: " + e.getMessage());
-//                }
-//                allegatoRepository.delete(allegato);
-//            }
-//            assegnazioneRepository.delete(a);
-//            count++;
-//        }
-//        return count;
-    	return 0;
+    public int cleanupAssegnazioni(LocalDate beforeDate, boolean includeCompletedBeforeDate) {
+        if (includeCompletedBeforeDate && beforeDate != null) {
+            LocalDateTime cutoff = beforeDate.atStartOfDay();
+            return jdbcTemplate.update(
+                    """
+                    delete from assegnazione
+                    where is_deleted = true
+                       or end_at < ?
+                    """,
+                    Timestamp.valueOf(cutoff));
+        }
+        return jdbcTemplate.update("delete from assegnazione where is_deleted = true");
     }
 
-    // Cancellazione hard commesse (manuale)
     @Override
-    public int cleanupCommesse() {
-//        List<Commessa> commesse = commessaRepository.findByIsDeletedTrue();
-//        int count = 0;
-//        for (Commessa c : commesse) {
-//            // Elimina assegnazioni legate
-//            List<Assegnazione> assegnazioni = assegnazioneRepository.findByCommessaId(c.getId());
-//            for (Assegnazione a : assegnazioni) {
-//                a.setIsDeleted(true);
-//                assegnazioneRepository.save(a);
-//            }
-//            cleanupAssegnazioni();
-//
-//            // Elimina pdf allegato (se presente)
-//            Allegato allegato = c.getPdfAllegato();
-//            if (allegato != null) {
-//                try {
-//                    s3Service.deleteFile(allegato.getStoragePath());
-//                } catch (Exception e) {
-//                    System.err.println("Errore cancellazione file PDF: " + e.getMessage());
-//                }
-//                allegatoRepository.delete(allegato);
-//            }
-//
-//            commessaRepository.delete(c);
-//            count++;
-//        }
-//        return count;
-    	return 0;
+    public int cleanupCantieri() {
+        return jdbcTemplate.update(
+                """
+                delete from cantiere c
+                where c.is_deleted = true
+                """);
     }
 
-    // Cancellazione hard clienti
     @Override
     public int cleanupClienti() {
-//        List<Cliente> clienti = clienteRepository.findByIsDeletedTrue();
-//        int count = 0;
-//        for (Cliente cli : clienti) {
-//            List<Assegnazione> assegnazioni = assegnazioneRepository.findByClienteId(cli.getId());
-//            for (Assegnazione a : assegnazioni) {
-//                a.setIsDeleted(true);
-//                assegnazioneRepository.save(a);
-//            }
-//            cleanupAssegnazioni();
-//            clienteRepository.delete(cli);
-//            count++;
-//        }
-//        return count;
-    	return 0;
+        return jdbcTemplate.update(
+                """
+                delete from cliente c
+                where c.is_deleted = true
+                """);
     }
 
-    // Cancellazione hard utenti
     @Override
     public int cleanupUtenti() {
-//        List<Utente> utenti = utenteRepository.findByIsDeletedTrue();
-//        int count = 0;
-//        for (Utente u : utenti) {
-//            List<Assegnazione> assegnazioni = assegnazioneRepository.findByUtenteId(u.getId());
-//            for (Assegnazione a : assegnazioni) {
-//                a.setIsDeleted(true);
-//                assegnazioneRepository.save(a);
-//            }
-//            cleanupAssegnazioni();
-//            utenteRepository.delete(u);
-//            count++;
-//        }
-//        return count;
-    	return 0;
+        return jdbcTemplate.update(
+                """
+                delete from utente u
+                where u.is_deleted = true
+                """);
     }
-    
+
     @Override
-    public com.db.mdm.gestionale.be.controller.RetentionController.SpaceUsageResponse getCurrentSpaceUsage() {
-        // Ottieni dimensione DB
+    public int cleanupVeicoli() {
+        return jdbcTemplate.update(
+                """
+                delete from veicolo v
+                where v.is_deleted = true
+                """);
+    }
+
+    @Override
+    public int cleanupAllegati(LocalDate beforeDate, boolean includeOldActive) {
+        List<String> toDeleteFromStorage;
+        int deleted;
+
+        if (includeOldActive && beforeDate != null) {
+            LocalDateTime cutoff = beforeDate.atStartOfDay();
+            toDeleteFromStorage = jdbcTemplate.queryForList(
+                    """
+                    select storage_path from allegato
+                    where is_deleted = true
+                       or created_at < ?
+                    """,
+                    String.class,
+                    Timestamp.valueOf(cutoff));
+
+            deleted = jdbcTemplate.update(
+                    """
+                    delete from allegato
+                    where is_deleted = true
+                       or created_at < ?
+                    """,
+                    Timestamp.valueOf(cutoff));
+        } else {
+            toDeleteFromStorage = jdbcTemplate.queryForList(
+                    "select storage_path from allegato where is_deleted = true",
+                    String.class);
+            deleted = jdbcTemplate.update("delete from allegato where is_deleted = true");
+        }
+
+        for (String storagePath : toDeleteFromStorage) {
+            try {
+                s3Service.deleteFile(storagePath);
+            } catch (Exception ignored) {
+                // Non blocca la pulizia DB se un file non viene trovato a storage.
+            }
+        }
+
+        return deleted;
+    }
+
+    @Override
+    public int cleanupNotifiche(LocalDate beforeDate, boolean includeReadBeforeDate) {
+        if (includeReadBeforeDate && beforeDate != null) {
+            LocalDateTime cutoff = beforeDate.atStartOfDay();
+            return jdbcTemplate.update(
+                    """
+                    delete from notifica
+                    where is_deleted = true
+                       or (letta = true and created_at < ?)
+                    """,
+                    Timestamp.valueOf(cutoff));
+        }
+        return jdbcTemplate.update("delete from notifica where is_deleted = true");
+    }
+
+    @Override
+    public SpaceUsageResponse getCurrentSpaceUsage() {
         String dbSize = jdbcTemplate.queryForObject(
-            "SELECT pg_size_pretty(pg_database_size(current_database()))",
-            String.class
+                "SELECT pg_size_pretty(pg_database_size(current_database()))",
+                String.class
         );
-
-        // Ottieni dimensione totale storage (in formato human readable)
         String storageSize = s3Service.getTotalStorageUsagePretty();
-
-        return new com.db.mdm.gestionale.be.controller.RetentionController.SpaceUsageResponse(dbSize, storageSize);
+        return new SpaceUsageResponse(dbSize, storageSize);
     }
 }

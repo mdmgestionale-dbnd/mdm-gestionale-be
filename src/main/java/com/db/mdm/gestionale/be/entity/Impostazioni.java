@@ -1,33 +1,35 @@
 package com.db.mdm.gestionale.be.entity;
 
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
-@Entity
-@Table(name = "impostazioni")
+import jakarta.persistence.*;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "impostazioni")
 public class Impostazioni {
 
     @Id
-    @Column(length = 100)
+    @Column(name = "chiave", length = 50)
     private String chiave;
 
-    @Column(nullable = false, length = 255)
+    @Column(name = "valore", nullable = false, length = 255)
     private String valore;
 
-    @Column(nullable = false, length = 50)
+    @Column(name = "tipo", nullable = false, length = 20)
     private String tipo;
 
-    @Column(columnDefinition = "TEXT")
-    private String descrizione;
-
     @Column(name = "min_value")
-    private Double minValue;
+    private Integer minValue;
 
     @Column(name = "max_value")
-    private Double maxValue;
+    private Integer maxValue;
+
+    @Column(name = "descrizione", columnDefinition = "TEXT")
+    private String descrizione;
 }
+

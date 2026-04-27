@@ -82,6 +82,18 @@ public class SupabaseS3ServiceImpl implements SupabaseS3Service {
     }
     
     @Override
+    public String uploadBytes(byte[] data, String path, String contentType) throws Exception {
+        PutObjectRequest putReq = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(path)
+                .contentType(contentType)
+                .build();
+        s3Client.putObject(putReq, RequestBody.fromBytes(data));
+        return path;
+    }
+
+    
+    @Override
     public String getTotalStorageUsagePretty() {
         try {
             ListObjectsV2Request listReq = ListObjectsV2Request.builder()

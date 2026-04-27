@@ -11,5 +11,7 @@ public interface UtenteService {
     List<Utente> findAll();
     Utente save(Utente utente);
     void deleteById(Long id);
+    void restore(Long id);
 	List<Utente> findDipendenti();
+	Utente getCurrentUtenteOrNull();
 }

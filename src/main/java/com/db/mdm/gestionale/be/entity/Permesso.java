@@ -1,26 +1,23 @@
 package com.db.mdm.gestionale.be.entity;
 
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Entity
-@Table(name = "permesso")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "permesso", indexes = {
+    @Index(name = "idx_permesso_utente", columnList = "utente_id"),
+    @Index(name = "idx_permesso_stato", columnList = "stato")
+})
 public class Permesso {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -29,8 +26,11 @@ public class Permesso {
     @JoinColumn(name = "utente_id", nullable = false)
     private Utente utente;
 
-    @Column(nullable = false, name = "tipo")
+    @Column(name = "tipo", nullable = false, length = 50)
     private String tipo;
+
+    @Column(name = "stato", nullable = false, length = 20)
+    private String stato = "IN_ATTESA";
 
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
@@ -38,15 +38,12 @@ public class Permesso {
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
     @ManyToOne
     @JoinColumn(name = "allegato_id")
     private Allegato allegato;
-
-    @Column(nullable = false)
-    private String status = "pending";
 
     @ManyToOne
     @JoinColumn(name = "richiesto_da")
@@ -56,12 +53,25 @@ public class Permesso {
     @JoinColumn(name = "approvato_da")
     private Utente approvatoDa;
 
-    @Column(name = "approvato_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "approvato_at")
     private LocalDateTime approvatoAt;
 
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) createdAt = now;
+        if (updatedAt == null) updatedAt = now;
+        if (stato == null || stato.isBlank()) stato = "IN_ATTESA";
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

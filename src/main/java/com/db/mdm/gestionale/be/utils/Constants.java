@@ -40,6 +40,8 @@ public final class Constants {
     
     // Tipi messaggi WebSocket
     public static final String MSG_REFRESH = "REFRESH";
+    public static final String MSG_ENTITY_CHANGED = "ENTITY_CHANGED";
+    public static final String MSG_NOTIFICATION = "NOTIFICATION";
     
     // Topics WebSocket
     public static final String BROADCAST = "/topic/broadcast";

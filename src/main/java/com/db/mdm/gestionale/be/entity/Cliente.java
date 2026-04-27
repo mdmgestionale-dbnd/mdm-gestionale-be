@@ -1,35 +1,48 @@
 package com.db.mdm.gestionale.be.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
-@Entity
-@Table(name = "cliente")
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "cliente")
 public class Cliente {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 200)
+    @Column(name = "nome", nullable = false, length = 200)
     private String nome;
 
+    @Column(name = "riferimento", length = 200)
     private String riferimento;
+
+    @Column(name = "telefono", length = 30)
     private String telefono;
+
+    @Column(name = "email", length = 200)
     private String email;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "indirizzo", columnDefinition = "TEXT")
     private String indirizzo;
 
     @Column(name = "is_deleted", nullable = false)
-    private Boolean isDeleted = false;
+    private boolean isDeleted = false;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

@@ -1,49 +1,54 @@
 package com.db.mdm.gestionale.be.entity;
 
-import java.time.LocalDateTime;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
-@Entity
-@Table(name = "cantiere")
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "cantiere", indexes = {
+    @Index(name = "idx_cantiere_cliente", columnList = "cliente_id")
+})
 public class Cantiere {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(optional = false)
     @JoinColumn(name = "cliente_id", nullable = false)
     private Cliente cliente;
 
-    @Column(nullable = false, length = 200)
+    @Column(name = "nome", nullable = false, length = 200)
     private String nome;
 
+    @Column(name = "codice", length = 50)
     private String codice;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "indirizzo", columnDefinition = "TEXT")
     private String indirizzo;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "descrizione", columnDefinition = "TEXT")
     private String descrizione;
 
+    @Column(name = "referente", length = 200)
     private String referente;
 
     @Column(name = "is_deleted", nullable = false)
-    private Boolean isDeleted = false;
+    private boolean isDeleted = false;
 
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

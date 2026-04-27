@@ -4,9 +4,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.db.mdm.gestionale.be.dto.CurrentUserDto;
 import com.db.mdm.gestionale.be.entity.Utente;
 import com.db.mdm.gestionale.be.repository.UtenteRepository;
 import com.db.mdm.gestionale.be.service.UtenteService;
@@ -43,6 +46,7 @@ public class UtenteServiceImpl implements UtenteService {
 
     @Override
     public Utente save(Utente utente) {
+        boolean isNew = utente.getId() == null;
         // Gestione password
         if (utente.getPassword() != null && !utente.getPassword().isEmpty() && !isPasswordEncoded(utente.getPassword())) {
             utente.setPassword(passwordEncoder.encode(utente.getPassword()));
@@ -73,7 +77,9 @@ public class UtenteServiceImpl implements UtenteService {
         utente.setUpdatedAt(now);
 
         Utente saved = repository.save(utente);
-        wsService.broadcast(Constants.MSG_REFRESH, null);
+        String action = isNew ? "create" : "update";
+        wsService.broadcast(Constants.MSG_ENTITY_CHANGED,
+                "{\"entity\":\"utente\",\"action\":\"" + action + "\",\"id\":" + saved.getId() + "}");
         return saved;
     }
 
@@ -84,7 +90,20 @@ public class UtenteServiceImpl implements UtenteService {
             u.setAttivo(false); // opzionale, per sicurezza
             repository.save(u);
         });
-        wsService.broadcast(Constants.MSG_REFRESH, null);
+        wsService.broadcast(Constants.MSG_ENTITY_CHANGED,
+                "{\"entity\":\"utente\",\"action\":\"delete\",\"id\":" + id + "}");
+    }
+
+    @Override
+    public void restore(Long id) {
+        repository.findById(id).ifPresent(u -> {
+            u.setIsDeleted(false);
+            u.setAttivo(true);
+            u.setUpdatedAt(LocalDateTime.now());
+            repository.save(u);
+        });
+        wsService.broadcast(Constants.MSG_ENTITY_CHANGED,
+                "{\"entity\":\"utente\",\"action\":\"restore\",\"id\":" + id + "}");
     }
 
 
@@ -94,7 +113,25 @@ public class UtenteServiceImpl implements UtenteService {
 
     @Override
     public List<Utente> findDipendenti() {
-        return repository.findByLivelloAndIsDeletedFalse(2); // 2 = DIPENDENTE
+        return repository.findByLivelloInAndIsDeletedFalse(List.of(1, 2));
     }
+
+	@Override
+	public Utente getCurrentUtenteOrNull() {
+		Object principal = org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        if (principal instanceof org.springframework.security.core.userdetails.UserDetails ud) {
+            var username = ud.getUsername();
+            var maybe = findByUsername(username);
+            if (maybe.isPresent()) {
+                Utente u = maybe.get();
+                return u;
+            }
+        }
+        return null;
+	}
     
 }

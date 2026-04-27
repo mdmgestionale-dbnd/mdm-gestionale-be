@@ -1,65 +1,62 @@
 package com.db.mdm.gestionale.be.entity;
 
-import java.time.LocalDateTime;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
-@Entity
-@Table(name = "assegnazione")
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "assegnazione", indexes = {
+    @Index(name = "idx_assegnazione_cantiere", columnList = "cantiere_id"),
+    @Index(name = "idx_assegnazione_start_end", columnList = "start_at, end_at"),
+    @Index(name = "idx_assegnazione_created_by", columnList = "created_by")
+})
 public class Assegnazione {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "cantiere_id")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "cantiere_id", nullable = false)
     private Cantiere cantiere;
 
-    @ManyToOne
-    @JoinColumn(name = "cliente_id")
-    private Cliente cliente;
-
-    @Column(columnDefinition = "TEXT")
-    private String descrizione;
-
-    @Column(name = "start_at", columnDefinition = "TIMESTAMP WITH TIME ZONE", nullable = false)
+    @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
 
-    @Column(name = "end_at", columnDefinition = "TIMESTAMP WITH TIME ZONE", nullable = false)
+    @Column(name = "end_at", nullable = false)
     private LocalDateTime endAt;
 
-    @Column(columnDefinition = "TEXT")
-    private String luogo;
-
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-    @Column(nullable = false)
-    private String stato = "planned";
-
     @Column(name = "is_deleted", nullable = false)
-    private Boolean isDeleted = false;
+    private boolean isDeleted = false;
 
     @ManyToOne
     @JoinColumn(name = "created_by")
     private Utente createdBy;
 
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", columnDefinition = "TIMESTAMP WITH TIME ZONE")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) createdAt = now;
+        if (updatedAt == null) updatedAt = now;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }
