@@ -6,4 +6,5 @@ import com.db.mdm.gestionale.be.entity.InventarioMovimento;
 
 public interface InventarioMovimentoRepository extends JpaRepository<InventarioMovimento, Long> {
     List<InventarioMovimento> findByAssegnazioneIdOrderByMovimentoAtDesc(Long assegnazioneId);
+    void deleteByAssegnazioneId(Long assegnazioneId);
 }

@@ -165,8 +165,8 @@ public class PermessoServiceImpl implements PermessoService {
 
     private String normalizeTipo(String tipoRaw) {
         String tipo = tipoRaw.trim().toUpperCase();
-        if (!"FERIE".equals(tipo) && !"MALATTIA".equals(tipo) && !"PERMESSO".equals(tipo)) {
-            throw new IllegalArgumentException("Tipo non valido. Usa FERIE, MALATTIA o PERMESSO");
+        if (!"FERIE".equals(tipo) && !"MALATTIA".equals(tipo)) {
+            throw new IllegalArgumentException("Tipo non valido. Usa FERIE o MALATTIA");
         }
         return tipo;
     }
@@ -208,6 +208,7 @@ public class PermessoServiceImpl implements PermessoService {
         notifica.setLivello("WARN");
         notifica.setRiferimentoTipo("PERMESSO");
         notifica.setRiferimentoId(permesso.getId());
+        notifica.setDestinatarioId(null);
         notifica.setChiaveUnica(key);
         notificaRepository.save(notifica);
         webSocketService.broadcast(Constants.MSG_NOTIFICATION, "{\"entity\":\"notifica\",\"action\":\"new\",\"id\":null}");
@@ -226,6 +227,7 @@ public class PermessoServiceImpl implements PermessoService {
         notifica.setLivello(approvata ? "INFO" : "WARN");
         notifica.setRiferimentoTipo("PERMESSO");
         notifica.setRiferimentoId(permesso.getId());
+        notifica.setDestinatarioId(permesso.getUtente().getId());
         notifica.setChiaveUnica(key);
         notificaRepository.save(notifica);
         webSocketService.broadcast(Constants.MSG_NOTIFICATION, "{\"entity\":\"notifica\",\"action\":\"new\",\"id\":null}");

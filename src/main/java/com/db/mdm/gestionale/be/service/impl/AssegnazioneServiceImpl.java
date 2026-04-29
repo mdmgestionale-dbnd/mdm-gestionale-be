@@ -109,7 +109,6 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
 
         replaceMembers(saved, request.getMembroIds());
         replaceVehicles(saved, request.getVeicoloIds());
-        registerMaterials(saved, request.getMaterialiUsati());
 
         broadcastEntityChange("assegnazione", "update", saved.getId());
         return saved;
@@ -233,6 +232,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
     public void softDelete(Long id) {
         Assegnazione existing = assegnazioneRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Assegnazione non trovata"));
+        inventarioMovimentoRepository.deleteByAssegnazioneId(id);
         existing.setDeleted(true);
         assegnazioneRepository.save(existing);
         broadcastEntityChange("assegnazione", "delete", id);
@@ -330,6 +330,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
 
     private void replaceMembers(Assegnazione assegnazione, List<Long> membroIds) {
         assegnazioneMembroRepository.deleteByAssegnazioneId(assegnazione.getId());
+        assegnazioneMembroRepository.flush();
         for (Long utenteId : nullSafeDistinct(membroIds)) {
             Utente utente = utenteRepository.findById(utenteId)
                     .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()) && Boolean.TRUE.equals(u.getAttivo()))
@@ -344,6 +345,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
 
     private void replaceVehicles(Assegnazione assegnazione, List<Long> veicoloIds) {
         assegnazioneVeicoloRepository.deleteByAssegnazioneId(assegnazione.getId());
+        assegnazioneVeicoloRepository.flush();
         for (Long veicoloId : nullSafeDistinct(veicoloIds)) {
             Veicolo veicolo = veicoloRepository.findById(veicoloId)
                     .filter(v -> !v.isDeleted())
@@ -380,7 +382,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
             mov.setDescrizione(
                     m.getDescrizione() != null && !m.getDescrizione().isBlank()
                             ? m.getDescrizione()
-                            : "Scarico materiale per assegnazione " + assegnazione.getId());
+                            : "Scarico materiale per cantiere " + assegnazione.getCantiere().getNome());
             inventarioMovimentoRepository.save(mov);
         }
     }

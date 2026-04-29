@@ -19,7 +19,8 @@ import lombok.NoArgsConstructor;
     @Index(name = "idx_notifica_tipo", columnList = "tipo"),
     @Index(name = "idx_notifica_letta", columnList = "letta"),
     @Index(name = "idx_notifica_scadenza", columnList = "data_scadenza"),
-    @Index(name = "idx_notifica_ref", columnList = "riferimento_tipo, riferimento_id")
+    @Index(name = "idx_notifica_ref", columnList = "riferimento_tipo, riferimento_id"),
+    @Index(name = "idx_notifica_destinatario", columnList = "destinatario_id")
 })
 @Data
 @NoArgsConstructor
@@ -47,6 +48,9 @@ public class Notifica {
 
     @Column(name = "riferimento_id")
     private Long riferimentoId;
+
+    @Column(name = "destinatario_id")
+    private Long destinatarioId;
 
     @Column(name = "data_scadenza")
     private LocalDate dataScadenza;

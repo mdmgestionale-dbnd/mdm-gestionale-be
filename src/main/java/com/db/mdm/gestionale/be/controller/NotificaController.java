@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 
 import com.db.mdm.gestionale.be.entity.Notifica;
 import com.db.mdm.gestionale.be.service.NotificaService;
+import com.db.mdm.gestionale.be.service.UtenteService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,11 +26,15 @@ import lombok.RequiredArgsConstructor;
 public class NotificaController {
 
     private final NotificaService notificaService;
+    private final UtenteService utenteService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE','DIPENDENTE')")
     public List<Notifica> list(@RequestParam(defaultValue = "false") boolean soloNonLette) {
-        notificaService.generaNotificheScadenzeVeicoli(30);
+        var current = utenteService.getCurrentUtenteOrNull();
+        if (current != null && Integer.valueOf(0).equals(current.getLivello())) {
+            notificaService.generaNotificheScadenzeVeicoli(30);
+        }
         return notificaService.findAll(soloNonLette);
     }
 

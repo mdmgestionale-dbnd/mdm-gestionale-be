@@ -3,17 +3,19 @@ package com.db.mdm.gestionale.be.service.impl;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.db.mdm.gestionale.be.entity.Notifica;
+import com.db.mdm.gestionale.be.entity.Utente;
 import com.db.mdm.gestionale.be.entity.Veicolo;
 import com.db.mdm.gestionale.be.repository.NotificaRepository;
 import com.db.mdm.gestionale.be.repository.VeicoloRepository;
 import com.db.mdm.gestionale.be.service.NotificaService;
+import com.db.mdm.gestionale.be.service.UtenteService;
 import com.db.mdm.gestionale.be.service.WebSocketService;
 import com.db.mdm.gestionale.be.utils.Constants;
 
@@ -25,15 +27,29 @@ public class NotificaServiceImpl implements NotificaService {
 
     private final NotificaRepository notificaRepository;
     private final VeicoloRepository veicoloRepository;
+    private final UtenteService utenteService;
     private final WebSocketService webSocketService;
 
     @Override
     @Transactional(readOnly = true)
     public List<Notifica> findAll(boolean soloNonLette) {
-        if (soloNonLette) {
-            return notificaRepository.findActionable(LocalDate.now().plusDays(30));
+        Utente current = utenteService.getCurrentUtenteOrNull();
+        if (current != null && !Integer.valueOf(0).equals(current.getLivello())) {
+            if (soloNonLette) {
+                return notificaRepository.findActionableForUser(current.getId(), LocalDate.now().plusDays(30));
+            }
+            return notificaRepository.findByIsDeletedFalseAndDestinatarioIdOrderByCreatedAtDesc(current.getId());
         }
-        return notificaRepository.findByIsDeletedFalseOrderByCreatedAtDesc();
+        if (soloNonLette) {
+            return notificaRepository.findActionable(LocalDate.now().plusDays(30))
+                    .stream()
+                    .filter(n -> n.getDestinatarioId() == null)
+                    .toList();
+        }
+        return notificaRepository.findByIsDeletedFalseOrderByCreatedAtDesc()
+                .stream()
+                .filter(n -> n.getDestinatarioId() == null)
+                .toList();
     }
 
     @Override
@@ -42,6 +58,7 @@ public class NotificaServiceImpl implements NotificaService {
         Notifica notifica = notificaRepository.findById(id)
                 .filter(n -> !n.isDeleted())
                 .orElseThrow(() -> new IllegalArgumentException("Notifica non trovata"));
+        ensureCanMutate(notifica);
         notifica.setLetta(true);
         Notifica saved = notificaRepository.save(notifica);
         broadcastNotificaChange("mark-read", saved.getId());
@@ -51,7 +68,16 @@ public class NotificaServiceImpl implements NotificaService {
     @Override
     @Transactional
     public void markAllAsRead() {
-        List<Notifica> all = notificaRepository.findByIsDeletedFalseAndLettaFalseOrderByCreatedAtDesc();
+        Utente current = utenteService.getCurrentUtenteOrNull();
+        List<Notifica> all = current != null && !Integer.valueOf(0).equals(current.getLivello())
+                ? notificaRepository.findByIsDeletedFalseAndLettaFalseAndDestinatarioIdOrderByCreatedAtDesc(current.getId())
+                : notificaRepository.findByIsDeletedFalseAndLettaFalseOrderByCreatedAtDesc();
+        if (current == null || Integer.valueOf(0).equals(current.getLivello())) {
+            all = all.stream().filter(n -> n.getDestinatarioId() == null).toList();
+        }
+        all = all.stream()
+                .filter(n -> n.getDataScadenza() == null && !n.getTipo().startsWith("SCADENZA_"))
+                .toList();
         if (all.isEmpty()) {
             return;
         }
@@ -66,6 +92,7 @@ public class NotificaServiceImpl implements NotificaService {
         Notifica notifica = notificaRepository.findById(id)
                 .filter(n -> !n.isDeleted())
                 .orElseThrow(() -> new IllegalArgumentException("Notifica non trovata"));
+        ensureCanMutate(notifica);
         notifica.setDeleted(true);
         notificaRepository.save(notifica);
         broadcastNotificaChange("delete", id);
@@ -79,6 +106,7 @@ public class NotificaServiceImpl implements NotificaService {
         int generated = 0;
 
         List<Veicolo> veicoli = veicoloRepository.findByIsDeletedFalseOrderByTargaAsc();
+        closeStaleVehicleNotifications(veicoli, limite);
         List<Notifica> nuove = new ArrayList<>();
 
         for (Veicolo v : veicoli) {
@@ -101,6 +129,38 @@ public class NotificaServiceImpl implements NotificaService {
         }
 
         return generated;
+    }
+
+    private void closeStaleVehicleNotifications(List<Veicolo> veicoli, LocalDate limite) {
+        var veicoliById = veicoli.stream().collect(java.util.stream.Collectors.toMap(Veicolo::getId, v -> v));
+        List<Notifica> stale = notificaRepository.findByRiferimentoTipoAndIsDeletedFalse("VEICOLO")
+                .stream()
+                .filter(n -> isVehicleNotificationStale(n, veicoliById.get(n.getRiferimentoId()), limite))
+                .toList();
+        if (stale.isEmpty()) {
+            return;
+        }
+        stale.forEach(n -> {
+            n.setLetta(true);
+            n.setDeleted(true);
+        });
+        notificaRepository.saveAll(stale);
+        broadcastNotificaChange("vehicle-stale-closed", null);
+    }
+
+    private boolean isVehicleNotificationStale(Notifica notifica, Veicolo veicolo, LocalDate limite) {
+        if (veicolo == null || veicolo.isDeleted()) {
+            return true;
+        }
+        LocalDate currentDeadline = switch (notifica.getTipo()) {
+            case "SCADENZA_ASSICURAZIONE" -> veicolo.getScadenzaAssicurazione();
+            case "SCADENZA_REVISIONE" -> veicolo.getScadenzaRevisione();
+            case "SCADENZA_BOLLO" -> veicolo.getScadenzaBollo();
+            default -> null;
+        };
+        return currentDeadline == null
+                || currentDeadline.isAfter(limite)
+                || !currentDeadline.equals(notifica.getDataScadenza());
     }
 
     @Scheduled(cron = "0 5 6 * * *")
@@ -130,7 +190,7 @@ public class NotificaServiceImpl implements NotificaService {
                 saved.setDeleted(false);
                 saved.setLetta(false);
                 saved.setLivello(scadenza.isBefore(oggi) ? "ERROR" : "WARN");
-                saved.setMessaggio(buildVehicleDeadlineMessage(label, veicolo.getTarga(), scadenza, oggi));
+                saved.setMessaggio(buildVehicleDeadlineMessage(label, veicolo.getTarga(), scadenza));
                 notificaRepository.save(saved);
                 return 1;
             }
@@ -140,7 +200,7 @@ public class NotificaServiceImpl implements NotificaService {
         Notifica notifica = new Notifica();
         notifica.setTipo(tipo);
         notifica.setTitolo(label + " in scadenza - " + veicolo.getTarga());
-        notifica.setMessaggio(buildVehicleDeadlineMessage(label, veicolo.getTarga(), scadenza, oggi));
+        notifica.setMessaggio(buildVehicleDeadlineMessage(label, veicolo.getTarga(), scadenza));
         notifica.setLivello(scadenza.isBefore(oggi) ? "ERROR" : "WARN");
         notifica.setRiferimentoTipo("VEICOLO");
         notifica.setRiferimentoId(veicolo.getId());
@@ -150,15 +210,21 @@ public class NotificaServiceImpl implements NotificaService {
         return 1;
     }
 
-    private String buildVehicleDeadlineMessage(String label, String targa, LocalDate scadenza, LocalDate oggi) {
-        long delta = scadenza.toEpochDay() - oggi.toEpochDay();
-        if (delta < 0) {
-            return label + " del veicolo " + targa + " scaduta il " + scadenza + ".";
+    private String buildVehicleDeadlineMessage(String label, String targa, LocalDate scadenza) {
+        return label + " del veicolo " + targa + " con scadenza il " + scadenza + ".";
+    }
+
+    private void ensureCanMutate(Notifica notifica) {
+        Utente current = utenteService.getCurrentUtenteOrNull();
+        if (current == null) {
+            return;
         }
-        if (Objects.equals(delta, 0L)) {
-            return label + " del veicolo " + targa + " in scadenza oggi (" + scadenza + ").";
+        if (Integer.valueOf(0).equals(current.getLivello()) && notifica.getDestinatarioId() == null) {
+            return;
         }
-        return label + " del veicolo " + targa + " in scadenza tra " + delta + " giorni (" + scadenza + ").";
+        if (!current.getId().equals(notifica.getDestinatarioId())) {
+            throw new AccessDeniedException("Notifica non disponibile per l'utente corrente");
+        }
     }
 
     private void broadcastNotificaChange(String action, Long id) {

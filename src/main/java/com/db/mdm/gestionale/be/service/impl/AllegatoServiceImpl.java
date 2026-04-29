@@ -14,7 +14,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.JPEGFactory;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.imgscalr.Scalr;
@@ -37,17 +37,14 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AllegatoServiceImpl implements AllegatoService {
 
-    private static final long MAX_BYTES = 2L * 1024 * 1024; // 2MB
+    private static final long MAX_UPLOAD_BYTES = 2L * 1024 * 1024; // 2MB
+    private static final long MAX_STORAGE_BYTES = 1L * 1024 * 1024; // 1MB
 
     private final AllegatoRepository allegatoRepo;
     private final SupabaseS3Service supabaseS3Service;
 
     private final Set<String> ALLOWED_MIMES = Set.of(
             "application/pdf",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.ms-excel",
             "image/png",
             "image/jpeg",
             "image/jpg"
@@ -58,25 +55,29 @@ public class AllegatoServiceImpl implements AllegatoService {
     public Allegato saveAllegato(MultipartFile file, Cantiere cantiere, Utente uploader) throws Exception {
         String contentType = file.getContentType() == null ? "" : file.getContentType();
 
-        if (!ALLOWED_MIMES.contains(contentType) && !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("Tipo file non ammesso");
+        if (!ALLOWED_MIMES.contains(contentType)) {
+            throw new IllegalArgumentException("Tipo file non ammesso. Sono consentiti solo PDF, JPG, JPEG e PNG.");
         }
 
         byte[] data = file.getBytes();
 
-        if (data.length > MAX_BYTES) {
-            // attempt compress for images and pdf
+        if (data.length > MAX_UPLOAD_BYTES) {
+            throw new IllegalArgumentException("File troppo grande: massimo 2MB in upload.");
+        }
+
+        if (data.length > MAX_STORAGE_BYTES) {
             if (contentType.startsWith("image/")) {
-                data = tryCompressImage(file, MAX_BYTES);
+                data = tryCompressImage(file, MAX_STORAGE_BYTES);
+                contentType = "image/jpeg";
             } else if ("application/pdf".equals(contentType)) {
-                data = tryCompressPdf(file, MAX_BYTES);
+                data = tryCompressPdf(file, MAX_STORAGE_BYTES);
             } else {
                 throw new IllegalArgumentException("File troppo grande e non comprimibile");
             }
         }
 
-        if (data.length > MAX_BYTES) {
-            throw new IllegalArgumentException("File supera i 2MB anche dopo la compressione");
+        if (data.length > MAX_STORAGE_BYTES) {
+            throw new IllegalArgumentException("File supera 1MB anche dopo la compressione");
         }
 
         String key = String.format("cantieri/%s/%s_%s", cantiere.getId(), UUID.randomUUID(), file.getOriginalFilename());
@@ -133,9 +134,6 @@ public class AllegatoServiceImpl implements AllegatoService {
 
         int width = img.getWidth();
         int height = img.getHeight();
-        float quality = 0.95f;
-
-        // Iteratively resize and re-encode as JPEG to reduce size
         for (int attempt = 0; attempt < 8; attempt++) {
             int newW = Math.max(200, (int) (width * Math.pow(0.85, attempt)));
             int newH = Math.max(200, (int) (height * Math.pow(0.85, attempt)));
@@ -152,30 +150,32 @@ public class AllegatoServiceImpl implements AllegatoService {
         ImageIO.write(Scalr.resize(img, Scalr.Method.ULTRA_QUALITY, 800, 600), "jpg", baos2);
         if (baos2.size() <= targetBytes) return baos2.toByteArray();
 
-        throw new IOException("Impossibile comprimere immagine sotto i 2MB");
+        throw new IOException("Impossibile comprimere immagine sotto 1MB");
     }
 
     private byte[] tryCompressPdf(MultipartFile file, long targetBytes) throws IOException {
         try (PDDocument doc = PDDocument.load(file.getInputStream())) {
-            PDFRenderer renderer = new PDFRenderer(doc);
-            PDDocument out = new PDDocument();
-            for (int i = 0; i < doc.getNumberOfPages(); i++) {
-                BufferedImage pageImage = renderer.renderImageWithDPI(i, 72); // low DPI
-                PDPage page = new PDPage(new PDRectangle(pageImage.getWidth(), pageImage.getHeight()));
-                out.addPage(page);
-                PDImageXObject pdImage = LosslessFactory.createFromImage(out, pageImage);
-                try (PDPageContentStream content = new PDPageContentStream(out, page)) {
-                    content.drawImage(pdImage, 0, 0, pageImage.getWidth(), pageImage.getHeight());
+            for (int dpi : List.of(90, 72, 55)) {
+                PDFRenderer renderer = new PDFRenderer(doc);
+                PDDocument out = new PDDocument();
+                for (int i = 0; i < doc.getNumberOfPages(); i++) {
+                    BufferedImage pageImage = renderer.renderImageWithDPI(i, dpi);
+                    PDPage page = new PDPage(new PDRectangle(pageImage.getWidth(), pageImage.getHeight()));
+                    out.addPage(page);
+                    PDImageXObject pdImage = JPEGFactory.createFromImage(out, pageImage, 0.65f);
+                    try (PDPageContentStream content = new PDPageContentStream(out, page)) {
+                        content.drawImage(pdImage, 0, 0, pageImage.getWidth(), pageImage.getHeight());
+                    }
                 }
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                out.save(baos);
+                out.close();
+                byte[] result = baos.toByteArray();
+                if (result.length <= targetBytes) return result;
             }
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            out.save(baos);
-            out.close();
-            byte[] result = baos.toByteArray();
-            if (result.length <= targetBytes) return result;
         } catch (Exception ex) {
             log.warn("PDF compression failed: {}", ex.getMessage());
         }
-        throw new IOException("Impossibile comprimere PDF sotto i 2MB");
+        throw new IOException("Impossibile comprimere PDF sotto 1MB");
     }
 }
