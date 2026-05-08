@@ -15,6 +15,7 @@ public class AssegnazioneCalendarioDto {
     private LocalDateTime startAt;
     private LocalDateTime endAt;
     private String note;
+    private String materialiNote;
     private List<Long> membroIds;
     private List<String> membroNomi;
     private List<Long> veicoloIds;

@@ -39,6 +39,9 @@ public class Veicolo {
     @Column(name = "scadenza_bollo")
     private LocalDate scadenzaBollo;
 
+    @Column(name = "scadenze_extra", columnDefinition = "TEXT")
+    private String scadenzeExtra;
+
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
@@ -60,4 +63,3 @@ public class Veicolo {
         updatedAt = LocalDateTime.now();
     }
 }
-

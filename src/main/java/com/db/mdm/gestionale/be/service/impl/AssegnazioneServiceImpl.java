@@ -74,13 +74,13 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
         entity.setStartAt(request.getStartAt());
         entity.setEndAt(request.getEndAt());
         entity.setNote(request.getNote());
+        entity.setMaterialiNote(request.getMaterialiNote());
         entity.setDeleted(false);
 
         Assegnazione saved = assegnazioneRepository.save(entity);
 
         replaceMembers(saved, request.getMembroIds());
         replaceVehicles(saved, request.getVeicoloIds());
-        registerMaterials(saved, request.getMaterialiUsati());
 
         broadcastEntityChange("assegnazione", "create", saved.getId());
         return saved;
@@ -105,6 +105,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
         existing.setStartAt(request.getStartAt());
         existing.setEndAt(request.getEndAt());
         existing.setNote(request.getNote());
+        existing.setMaterialiNote(request.getMaterialiNote());
         Assegnazione saved = assegnazioneRepository.save(existing);
 
         replaceMembers(saved, request.getMembroIds());
@@ -153,18 +154,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
             List<String> veicoloNomi = assegnazioneVeicoloRepository.findByAssegnazioneId(a.getId()).stream()
                     .map(x -> x.getVeicolo().getTarga() + (x.getVeicolo().getModello() != null ? " - " + x.getVeicolo().getModello() : ""))
                     .toList();
-            List<AssegnazioneCalendarioDto.MaterialeDto> materiali = inventarioMovimentoRepository
-                    .findByAssegnazioneIdOrderByMovimentoAtDesc(a.getId()).stream()
-                    .map(m -> AssegnazioneCalendarioDto.MaterialeDto.builder()
-                            .id(m.getId())
-                            .inventarioId(m.getInventario().getId())
-                            .magazzinoId(m.getInventario().getMagazzino().getId())
-                            .magazzinoNome(m.getInventario().getMagazzino().getNome())
-                            .articoloNome(m.getInventario().getNome())
-                            .quantita(m.getQuantita())
-                            .descrizione(m.getDescrizione())
-                            .build())
-                    .toList();
+            List<AssegnazioneCalendarioDto.MaterialeDto> materiali = List.of();
 
             out.add(AssegnazioneCalendarioDto.builder()
                     .id(a.getId())
@@ -173,6 +163,7 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
                     .startAt(a.getStartAt())
                     .endAt(a.getEndAt())
                     .note(a.getNote())
+                    .materialiNote(a.getMaterialiNote())
                     .membroIds(membroIds)
                     .membroNomi(membroNomi)
                     .veicoloIds(veicoloIds)
@@ -292,6 +283,25 @@ public class AssegnazioneServiceImpl implements AssegnazioneService {
         }
         registerMaterials(assegnazione, List.of(materiale));
         broadcastEntityChange("inventario-movimento", "create", id);
+    }
+
+    @Override
+    @Transactional
+    public void updateMaterialiNote(Long id, String materialiNote) {
+        Assegnazione assegnazione = assegnazioneRepository.findById(id)
+                .filter(a -> !a.isDeleted())
+                .orElseThrow(() -> new IllegalArgumentException("Assegnazione non trovata"));
+        Utente current = utenteService.getCurrentUtenteOrNull();
+        if (current == null) {
+            throw new IllegalStateException("Utente corrente non disponibile");
+        }
+        if (Integer.valueOf(2).equals(current.getLivello())
+                && !assegnazioneMembroRepository.existsByAssegnazioneIdAndUtenteId(id, current.getId())) {
+            throw new IllegalStateException("Non puoi modificare i materiali di un'assegnazione non tua");
+        }
+        assegnazione.setMaterialiNote(materialiNote == null ? "" : materialiNote.trim());
+        assegnazioneRepository.save(assegnazione);
+        broadcastEntityChange("assegnazione", "update-materiali", id);
     }
 
     private void validateRequest(AssegnazionePianificazioneRequestDto request) {

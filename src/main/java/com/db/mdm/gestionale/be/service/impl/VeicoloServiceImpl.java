@@ -33,11 +33,12 @@ public class VeicoloServiceImpl implements VeicoloService {
         LocalDate oldAssicurazione = before != null ? before.getScadenzaAssicurazione() : null;
         LocalDate oldRevisione = before != null ? before.getScadenzaRevisione() : null;
         LocalDate oldBollo = before != null ? before.getScadenzaBollo() : null;
+        String oldExtra = before != null ? before.getScadenzeExtra() : null;
         Veicolo saved = repository.save(entity);
         if (before != null) {
-            List<String> changedDeadlineTypes = changedDeadlineTypes(oldAssicurazione, oldRevisione, oldBollo, saved);
+            List<String> changedDeadlineTypes = changedDeadlineTypes(oldAssicurazione, oldRevisione, oldBollo, oldExtra, saved);
             if (!changedDeadlineTypes.isEmpty()) {
-                closeVehicleDeadlineNotifications(saved.getId(), changedDeadlineTypes);
+                closeVehicleDeadlineNotifications(saved.getId());
             }
         }
         String action = isNew ? "create" : "update";
@@ -46,7 +47,7 @@ public class VeicoloServiceImpl implements VeicoloService {
         return saved;
     }
 
-    private List<String> changedDeadlineTypes(LocalDate oldAssicurazione, LocalDate oldRevisione, LocalDate oldBollo, Veicolo after) {
+    private List<String> changedDeadlineTypes(LocalDate oldAssicurazione, LocalDate oldRevisione, LocalDate oldBollo, String oldExtra, Veicolo after) {
         List<String> changed = new ArrayList<>();
         if (!java.util.Objects.equals(oldAssicurazione, after.getScadenzaAssicurazione())) {
             changed.add("SCADENZA_ASSICURAZIONE");
@@ -57,12 +58,15 @@ public class VeicoloServiceImpl implements VeicoloService {
         if (!java.util.Objects.equals(oldBollo, after.getScadenzaBollo())) {
             changed.add("SCADENZA_BOLLO");
         }
+        if (!java.util.Objects.equals(oldExtra, after.getScadenzeExtra())) {
+            changed.add("SCADENZA_EXTRA");
+        }
         return changed;
     }
 
-    private void closeVehicleDeadlineNotifications(Long veicoloId, List<String> changedTypes) {
+    private void closeVehicleDeadlineNotifications(Long veicoloId) {
         List<Notifica> notifiche = notificaRepository.findByRiferimentoTipoAndRiferimentoIdAndIsDeletedFalse("VEICOLO", veicoloId);
-        notifiche = notifiche.stream().filter(n -> changedTypes.contains(n.getTipo())).toList();
+        notifiche = notifiche.stream().filter(n -> n.getTipo() != null && n.getTipo().startsWith("SCADENZA_")).toList();
         if (notifiche.isEmpty()) {
             return;
         }

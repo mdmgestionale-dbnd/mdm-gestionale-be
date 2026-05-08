@@ -18,6 +18,8 @@ import com.db.mdm.gestionale.be.service.NotificaService;
 import com.db.mdm.gestionale.be.service.UtenteService;
 import com.db.mdm.gestionale.be.service.WebSocketService;
 import com.db.mdm.gestionale.be.utils.Constants;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +31,7 @@ public class NotificaServiceImpl implements NotificaService {
     private final VeicoloRepository veicoloRepository;
     private final UtenteService utenteService;
     private final WebSocketService webSocketService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     @Transactional(readOnly = true)
@@ -119,6 +122,11 @@ public class NotificaServiceImpl implements NotificaService {
             generated += maybeCreateVehicleNotification(
                     nuove, v, "SCADENZA_BOLLO", "Bollo",
                     v.getScadenzaBollo(), oggi, limite);
+            for (ExtraDeadline extra : parseExtraDeadlines(v)) {
+                generated += maybeCreateVehicleNotification(
+                        nuove, v, "SCADENZA_EXTRA_" + extra.id(), extra.nome(),
+                        extra.data(), oggi, limite);
+            }
         }
 
         if (!nuove.isEmpty()) {
@@ -156,7 +164,7 @@ public class NotificaServiceImpl implements NotificaService {
             case "SCADENZA_ASSICURAZIONE" -> veicolo.getScadenzaAssicurazione();
             case "SCADENZA_REVISIONE" -> veicolo.getScadenzaRevisione();
             case "SCADENZA_BOLLO" -> veicolo.getScadenzaBollo();
-            default -> null;
+            default -> findExtraDeadline(veicolo, notifica.getTipo());
         };
         return currentDeadline == null
                 || currentDeadline.isAfter(limite)
@@ -213,6 +221,50 @@ public class NotificaServiceImpl implements NotificaService {
     private String buildVehicleDeadlineMessage(String label, String targa, LocalDate scadenza) {
         return label + " del veicolo " + targa + " con scadenza il " + scadenza + ".";
     }
+
+    private LocalDate findExtraDeadline(Veicolo veicolo, String tipo) {
+        if (tipo == null || !tipo.startsWith("SCADENZA_EXTRA_")) {
+            return null;
+        }
+        String id = tipo.substring("SCADENZA_EXTRA_".length());
+        return parseExtraDeadlines(veicolo).stream()
+                .filter(extra -> extra.id().equals(id))
+                .map(ExtraDeadline::data)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<ExtraDeadline> parseExtraDeadlines(Veicolo veicolo) {
+        if (veicolo == null || veicolo.getScadenzeExtra() == null || veicolo.getScadenzeExtra().isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(veicolo.getScadenzeExtra());
+            if (!root.isArray()) {
+                return List.of();
+            }
+            List<ExtraDeadline> out = new ArrayList<>();
+            for (JsonNode node : root) {
+                String id = text(node, "id");
+                String nome = text(node, "nome");
+                String data = text(node, "data");
+                if (id.isBlank() || nome.isBlank() || data.isBlank()) {
+                    continue;
+                }
+                out.add(new ExtraDeadline(id, nome, LocalDate.parse(data)));
+            }
+            return out;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private String text(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? "" : value.asText("").trim();
+    }
+
+    private record ExtraDeadline(String id, String nome, LocalDate data) {}
 
     private void ensureCanMutate(Notifica notifica) {
         Utente current = utenteService.getCurrentUtenteOrNull();

@@ -17,7 +17,7 @@ public class Impostazioni {
     @Column(name = "chiave", length = 50)
     private String chiave;
 
-    @Column(name = "valore", nullable = false, length = 255)
+    @Column(name = "valore", nullable = false, columnDefinition = "TEXT")
     private String valore;
 
     @Column(name = "tipo", nullable = false, length = 20)
@@ -32,4 +32,3 @@ public class Impostazioni {
     @Column(name = "descrizione", columnDefinition = "TEXT")
     private String descrizione;
 }
-

@@ -96,4 +96,11 @@ public class AssegnazioneController {
         service.addMateriale(id, materiale);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping(path = "/{id}/materiali-note", consumes = MediaType.TEXT_PLAIN_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> updateMaterialiNote(@PathVariable Long id, @RequestBody(required = false) String note) {
+        service.updateMaterialiNote(id, note == null ? "" : note);
+        return ResponseEntity.noContent().build();
+    }
 }

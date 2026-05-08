@@ -22,4 +22,5 @@ public interface AssegnazioneService {
     void restore(Long id);
     Allegato uploadAllegato(Long id, MultipartFile file) throws Exception;
     void addMateriale(Long id, AssegnazionePianificazioneRequestDto.MaterialeUsatoDto materiale);
+    void updateMaterialiNote(Long id, String materialiNote);
 }

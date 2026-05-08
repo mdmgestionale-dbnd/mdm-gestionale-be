@@ -37,8 +37,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AllegatoServiceImpl implements AllegatoService {
 
-    private static final long MAX_UPLOAD_BYTES = 2L * 1024 * 1024; // 2MB
-    private static final long MAX_STORAGE_BYTES = 1L * 1024 * 1024; // 1MB
+    private static final long MAX_UPLOAD_BYTES = 12L * 1024 * 1024; // 12MB
+    private static final long MAX_STORAGE_BYTES = 2L * 1024 * 1024; // 2MB
 
     private final AllegatoRepository allegatoRepo;
     private final SupabaseS3Service supabaseS3Service;
@@ -62,7 +62,7 @@ public class AllegatoServiceImpl implements AllegatoService {
         byte[] data = file.getBytes();
 
         if (data.length > MAX_UPLOAD_BYTES) {
-            throw new IllegalArgumentException("File troppo grande: massimo 2MB in upload.");
+            throw new IllegalArgumentException("File troppo grande: massimo 12MB in upload.");
         }
 
         if (data.length > MAX_STORAGE_BYTES) {
@@ -77,7 +77,7 @@ public class AllegatoServiceImpl implements AllegatoService {
         }
 
         if (data.length > MAX_STORAGE_BYTES) {
-            throw new IllegalArgumentException("File supera 1MB anche dopo la compressione");
+            throw new IllegalArgumentException("File supera 2MB anche dopo la compressione");
         }
 
         String key = String.format("cantieri/%s/%s_%s", cantiere.getId(), UUID.randomUUID(), file.getOriginalFilename());

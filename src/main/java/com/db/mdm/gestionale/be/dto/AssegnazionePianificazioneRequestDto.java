@@ -20,6 +20,7 @@ public class AssegnazionePianificazioneRequestDto {
     private LocalDateTime endAt;
 
     private String note;
+    private String materialiNote;
 
     private List<Long> membroIds;
     private List<Long> veicoloIds;

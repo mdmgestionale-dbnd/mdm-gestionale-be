@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -27,9 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.db.mdm.gestionale.be.dto.OreLavorateReportDto;
 import com.db.mdm.gestionale.be.entity.AssegnazioneMembro;
+import com.db.mdm.gestionale.be.entity.AssegnazioneVeicolo;
 import com.db.mdm.gestionale.be.entity.Permesso;
 import com.db.mdm.gestionale.be.entity.Utente;
+import com.db.mdm.gestionale.be.entity.Veicolo;
 import com.db.mdm.gestionale.be.repository.AssegnazioneMembroRepository;
+import com.db.mdm.gestionale.be.repository.AssegnazioneVeicoloRepository;
+import com.db.mdm.gestionale.be.repository.ImpostazioniRepository;
 import com.db.mdm.gestionale.be.repository.PermessoRepository;
 import com.db.mdm.gestionale.be.repository.UtenteRepository;
 import com.db.mdm.gestionale.be.service.ReportService;
@@ -41,8 +46,10 @@ import lombok.RequiredArgsConstructor;
 public class ReportServiceImpl implements ReportService {
 
     private final AssegnazioneMembroRepository assegnazioneMembroRepository;
+    private final AssegnazioneVeicoloRepository assegnazioneVeicoloRepository;
     private final PermessoRepository permessoRepository;
     private final UtenteRepository utenteRepository;
+    private final ImpostazioniRepository impostazioniRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -75,7 +82,7 @@ public class ReportServiceImpl implements ReportService {
                 continue;
             }
 
-            double hours = Duration.between(effectiveStart, effectiveEnd).toMinutes() / 60.0;
+            double hours = workedHours(effectiveStart, effectiveEnd);
 
             OreAgg agg = map.computeIfAbsent(u.getId(), x -> new OreAgg());
             agg.utente = u;
@@ -145,6 +152,7 @@ public class ReportServiceImpl implements ReportService {
 
         Map<Long, UserGrid> grids = new LinkedHashMap<>();
         users.forEach(u -> grids.put(u.getId(), new UserGrid(u)));
+        Map<Long, VehicleGrid> vehicleGrids = new LinkedHashMap<>();
 
         for (AssegnazioneMembro am : assegnazioneMembroRepository.findAllOverlapping(start, endExclusive)) {
             UserGrid grid = grids.get(am.getUtente().getId());
@@ -160,12 +168,25 @@ public class ReportServiceImpl implements ReportService {
                 LocalDateTime sliceStart = max(effectiveStart, dayStart);
                 LocalDateTime sliceEnd = min(effectiveEnd, dayEnd);
                 if (sliceEnd.isAfter(sliceStart)) {
-                    double hours = Duration.between(sliceStart, sliceEnd).toMinutes() / 60.0;
+                    double hours = workedHours(sliceStart, sliceEnd);
                     String cantiere = am.getAssegnazione().getCantiere().getNome();
                     grid.addHours(cantiere, cursor, hours);
                 }
                 cursor = cursor.plusDays(1);
             }
+        }
+
+        for (AssegnazioneVeicolo av : assegnazioneVeicoloRepository.findAllOverlapping(start, endExclusive)) {
+            VehicleGrid grid = vehicleGrids.computeIfAbsent(av.getVeicolo().getId(), x -> new VehicleGrid(av.getVeicolo()));
+            String usersLabel = assegnazioneMembroRepository.findByAssegnazioneId(av.getAssegnazione().getId()).stream()
+                    .map(am -> displayName(am.getUtente()))
+                    .sorted()
+                    .collect(java.util.stream.Collectors.joining(", "));
+            grid.rows.add(new VehicleUsage(
+                    max(av.getAssegnazione().getStartAt(), start),
+                    min(av.getAssegnazione().getEndAt(), endExclusive),
+                    av.getAssegnazione().getCantiere().getNome(),
+                    usersLabel));
         }
 
         for (UserGrid grid : grids.values()) {
@@ -212,6 +233,9 @@ public class ReportServiceImpl implements ReportService {
                 numeric(row, 3, grid.malattiaDays, numberStyle);
                 createUserSheet(workbook, grid, days, headerStyle, numberStyle, usedSheetNames);
             }
+            for (VehicleGrid vehicleGrid : vehicleGrids.values()) {
+                createVehicleSheet(workbook, vehicleGrid, headerStyle, usedSheetNames);
+            }
             for (int i = 0; i < 4; i++) summary.autoSizeColumn(i);
 
             workbook.write(out);
@@ -219,6 +243,26 @@ public class ReportServiceImpl implements ReportService {
         } catch (IOException e) {
             throw new IllegalStateException("Errore generazione Excel", e);
         }
+    }
+
+    private void createVehicleSheet(XSSFWorkbook workbook, VehicleGrid grid, CellStyle headerStyle, Set<String> usedSheetNames) {
+        String label = "Mezzo " + (grid.veicolo.getTarga() == null ? grid.veicolo.getId() : grid.veicolo.getTarga());
+        var sheet = workbook.createSheet(uniqueSheetName(label, usedSheetNames));
+        Row header = sheet.createRow(0);
+        set(header, 0, "Data", headerStyle);
+        set(header, 1, "Orario", headerStyle);
+        set(header, 2, "Cantiere", headerStyle);
+        set(header, 3, "Utilizzato da", headerStyle);
+        int rowIndex = 1;
+        for (VehicleUsage usage : grid.rows) {
+            Row row = sheet.createRow(rowIndex++);
+            set(row, 0, usage.start().toLocalDate().toString(), null);
+            set(row, 1, usage.start().toLocalTime() + " - " + usage.end().toLocalTime(), null);
+            set(row, 2, usage.cantiere(), null);
+            set(row, 3, usage.utilizzatori(), null);
+        }
+        for (int i = 0; i < 4; i++) sheet.autoSizeColumn(i);
+        sheet.createFreezePane(0, 1);
     }
 
     private void createUserSheet(XSSFWorkbook workbook, UserGrid grid, List<LocalDate> days, CellStyle headerStyle, CellStyle numberStyle, Set<String> usedSheetNames) {
@@ -287,6 +331,37 @@ public class ReportServiceImpl implements ReportService {
         return Math.round(value * 100.0) / 100.0;
     }
 
+    private double workedHours(LocalDateTime start, LocalDateTime end) {
+        double minutes = Duration.between(start, end).toMinutes();
+        LocalTime lunchStart = settingTime("pranzo_inizio", LocalTime.of(13, 0));
+        LocalTime lunchEnd = settingTime("pranzo_fine", LocalTime.of(14, 0));
+        if (!lunchEnd.isAfter(lunchStart)) {
+            return minutes / 60.0;
+        }
+        for (LocalDate day = start.toLocalDate(); !day.isAfter(end.minusNanos(1).toLocalDate()); day = day.plusDays(1)) {
+            LocalDateTime pauseStart = day.atTime(lunchStart);
+            LocalDateTime pauseEnd = day.atTime(lunchEnd);
+            LocalDateTime overlapStart = max(start, pauseStart);
+            LocalDateTime overlapEnd = min(end, pauseEnd);
+            if (overlapEnd.isAfter(overlapStart)) {
+                minutes -= Duration.between(overlapStart, overlapEnd).toMinutes();
+            }
+        }
+        return Math.max(0, minutes) / 60.0;
+    }
+
+    private LocalTime settingTime(String key, LocalTime fallback) {
+        return impostazioniRepository.findById(key)
+                .map(i -> {
+                    try {
+                        return LocalTime.parse(i.getValore());
+                    } catch (Exception ignored) {
+                        return fallback;
+                    }
+                })
+                .orElse(fallback);
+    }
+
     private String displayName(Utente utente) {
         String nomeCompleto = ((utente.getNome() == null ? "" : utente.getNome()) + " "
                 + (utente.getCognome() == null ? "" : utente.getCognome())).trim();
@@ -337,4 +412,15 @@ public class ReportServiceImpl implements ReportService {
                     .sum();
         }
     }
+
+    private static class VehicleGrid {
+        private final Veicolo veicolo;
+        private final List<VehicleUsage> rows = new ArrayList<>();
+
+        private VehicleGrid(Veicolo veicolo) {
+            this.veicolo = veicolo;
+        }
+    }
+
+    private record VehicleUsage(LocalDateTime start, LocalDateTime end, String cantiere, String utilizzatori) {}
 }

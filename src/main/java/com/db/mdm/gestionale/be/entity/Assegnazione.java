@@ -35,6 +35,9 @@ public class Assegnazione {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
+    @Column(name = "materiali_note", columnDefinition = "TEXT")
+    private String materialiNote;
+
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
