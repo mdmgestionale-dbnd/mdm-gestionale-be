@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -44,6 +45,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ReportServiceImpl implements ReportService {
+    private static final DateTimeFormatter IT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter IT_DAY = DateTimeFormatter.ofPattern("dd/MM");
+    private static final DateTimeFormatter IT_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AssegnazioneMembroRepository assegnazioneMembroRepository;
     private final AssegnazioneVeicoloRepository assegnazioneVeicoloRepository;
@@ -82,11 +86,12 @@ public class ReportServiceImpl implements ReportService {
                 continue;
             }
 
-            double hours = workedHours(effectiveStart, effectiveEnd);
+            WorkSplit hours = workedHoursSplit(effectiveStart, effectiveEnd);
 
             OreAgg agg = map.computeIfAbsent(u.getId(), x -> new OreAgg());
             agg.utente = u;
-            agg.ore += hours;
+            agg.ore += hours.ordinary();
+            agg.oreStraordinario += hours.overtime();
         }
 
         if (utenteId != null && !map.containsKey(utenteId)) {
@@ -124,6 +129,7 @@ public class ReportServiceImpl implements ReportService {
                     .utenteId(agg.utente.getId())
                     .nomeCompleto(nomeCompleto)
                     .oreLavorate(Math.round(agg.ore * 100.0) / 100.0)
+                    .oreStraordinario(Math.round(agg.oreStraordinario * 100.0) / 100.0)
                     .giorniAssenzaApprovata(agg.giorniAssenza)
                     .build());
         }
@@ -168,9 +174,9 @@ public class ReportServiceImpl implements ReportService {
                 LocalDateTime sliceStart = max(effectiveStart, dayStart);
                 LocalDateTime sliceEnd = min(effectiveEnd, dayEnd);
                 if (sliceEnd.isAfter(sliceStart)) {
-                    double hours = workedHours(sliceStart, sliceEnd);
+                    WorkSplit hours = workedHoursSplit(sliceStart, sliceEnd);
                     String cantiere = am.getAssegnazione().getCantiere().getNome();
-                    grid.addHours(cantiere, cursor, hours);
+                    grid.addHours(cantiere, cursor, hours.ordinary(), hours.overtime());
                 }
                 cursor = cursor.plusDays(1);
             }
@@ -218,9 +224,11 @@ public class ReportServiceImpl implements ReportService {
             var summary = workbook.createSheet("Riepilogo");
             Row h = summary.createRow(0);
             set(h, 0, "Dipendente", headerStyle);
-            set(h, 1, "Ore lavorate", headerStyle);
-            set(h, 2, "Giorni ferie", headerStyle);
-            set(h, 3, "Giorni malattia", headerStyle);
+            set(h, 1, "Ore ordinarie", headerStyle);
+            set(h, 2, "Ore straordinario", headerStyle);
+            set(h, 3, "Totale ore", headerStyle);
+            set(h, 4, "Giorni ferie", headerStyle);
+            set(h, 5, "Giorni malattia", headerStyle);
 
             int r = 1;
             Set<String> usedSheetNames = new HashSet<>();
@@ -228,15 +236,17 @@ public class ReportServiceImpl implements ReportService {
             for (UserGrid grid : grids.values()) {
                 Row row = summary.createRow(r++);
                 set(row, 0, displayName(grid.user), null);
-                numeric(row, 1, round(grid.totalHours()), numberStyle);
-                numeric(row, 2, grid.ferieDays, numberStyle);
-                numeric(row, 3, grid.malattiaDays, numberStyle);
+                numeric(row, 1, round(grid.totalOrdinaryHours()), numberStyle);
+                numeric(row, 2, round(grid.totalOvertimeHours()), numberStyle);
+                numeric(row, 3, round(grid.totalHours()), numberStyle);
+                numeric(row, 4, grid.ferieDays, numberStyle);
+                numeric(row, 5, grid.malattiaDays, numberStyle);
                 createUserSheet(workbook, grid, days, headerStyle, numberStyle, usedSheetNames);
             }
             for (VehicleGrid vehicleGrid : vehicleGrids.values()) {
                 createVehicleSheet(workbook, vehicleGrid, headerStyle, usedSheetNames);
             }
-            for (int i = 0; i < 4; i++) summary.autoSizeColumn(i);
+            for (int i = 0; i < 6; i++) summary.autoSizeColumn(i);
 
             workbook.write(out);
             return out.toByteArray();
@@ -256,8 +266,8 @@ public class ReportServiceImpl implements ReportService {
         int rowIndex = 1;
         for (VehicleUsage usage : grid.rows) {
             Row row = sheet.createRow(rowIndex++);
-            set(row, 0, usage.start().toLocalDate().toString(), null);
-            set(row, 1, usage.start().toLocalTime() + " - " + usage.end().toLocalTime(), null);
+            set(row, 0, usage.start().toLocalDate().format(IT_DATE), null);
+            set(row, 1, usage.start().toLocalTime().format(IT_TIME) + " - " + usage.end().toLocalTime().format(IT_TIME), null);
             set(row, 2, usage.cantiere(), null);
             set(row, 3, usage.utilizzatori(), null);
         }
@@ -273,23 +283,29 @@ public class ReportServiceImpl implements ReportService {
         Row header = sheet.createRow(0);
         set(header, 0, "Cantiere", headerStyle);
         for (int i = 0; i < days.size(); i++) {
-            set(header, i + 1, days.get(i).toString().substring(5), headerStyle);
+            set(header, i + 1, days.get(i).format(IT_DAY), headerStyle);
         }
-        set(header, days.size() + 1, "Totale", headerStyle);
+        set(header, days.size() + 1, "Totale ordinarie", headerStyle);
+        set(header, days.size() + 2, "Totale straordinario", headerStyle);
+        set(header, days.size() + 3, "Totale ore", headerStyle);
 
         int rowIndex = 1;
         for (Map.Entry<String, Map<LocalDate, Double>> cantiere : grid.hoursByCantiere.entrySet()) {
             Row row = sheet.createRow(rowIndex++);
             set(row, 0, cantiere.getKey(), null);
-            double total = 0;
+            double totalOrdinary = 0;
+            double totalOvertime = 0;
             for (int i = 0; i < days.size(); i++) {
                 double hours = cantiere.getValue().getOrDefault(days.get(i), 0.0);
                 if (hours > 0) {
                     numeric(row, i + 1, round(hours), numberStyle);
                 }
-                total += hours;
+                totalOrdinary += hours;
+                totalOvertime += grid.overtimeByCantiere.getOrDefault(cantiere.getKey(), Map.of()).getOrDefault(days.get(i), 0.0);
             }
-            numeric(row, days.size() + 1, round(total), numberStyle);
+            numeric(row, days.size() + 1, round(totalOrdinary), numberStyle);
+            numeric(row, days.size() + 2, round(totalOvertime), numberStyle);
+            numeric(row, days.size() + 3, round(totalOrdinary + totalOvertime), numberStyle);
         }
 
         int leaveStart = Math.max(rowIndex + 1, 2);
@@ -301,7 +317,7 @@ public class ReportServiceImpl implements ReportService {
         numeric(malattia, 1, grid.malattiaDays, numberStyle);
 
         sheet.autoSizeColumn(0);
-        for (int i = 1; i <= days.size() + 1; i++) {
+        for (int i = 1; i <= days.size() + 3; i++) {
             sheet.setColumnWidth(i, 2800);
         }
         sheet.createFreezePane(1, 1);
@@ -331,23 +347,52 @@ public class ReportServiceImpl implements ReportService {
         return Math.round(value * 100.0) / 100.0;
     }
 
-    private double workedHours(LocalDateTime start, LocalDateTime end) {
-        double minutes = Duration.between(start, end).toMinutes();
+    private WorkSplit workedHoursSplit(LocalDateTime start, LocalDateTime end) {
+        double ordinaryMinutes = 0;
+        double overtimeMinutes = 0;
         LocalTime lunchStart = settingTime("pranzo_inizio", LocalTime.of(13, 0));
         LocalTime lunchEnd = settingTime("pranzo_fine", LocalTime.of(14, 0));
-        if (!lunchEnd.isAfter(lunchStart)) {
-            return minutes / 60.0;
-        }
+        LocalTime overtimeStart = settingTime("straordinario_inizio", LocalTime.of(17, 0));
+
         for (LocalDate day = start.toLocalDate(); !day.isAfter(end.minusNanos(1).toLocalDate()); day = day.plusDays(1)) {
-            LocalDateTime pauseStart = day.atTime(lunchStart);
-            LocalDateTime pauseEnd = day.atTime(lunchEnd);
-            LocalDateTime overlapStart = max(start, pauseStart);
-            LocalDateTime overlapEnd = min(end, pauseEnd);
-            if (overlapEnd.isAfter(overlapStart)) {
-                minutes -= Duration.between(overlapStart, overlapEnd).toMinutes();
+            LocalDateTime dayStart = day.atStartOfDay();
+            LocalDateTime dayEnd = day.plusDays(1).atStartOfDay();
+            LocalDateTime cursor = max(start, dayStart);
+            LocalDateTime sliceEnd = min(end, dayEnd);
+            if (!sliceEnd.isAfter(cursor)) {
+                continue;
+            }
+
+            List<Interval> workingIntervals = new ArrayList<>();
+            if (lunchEnd.isAfter(lunchStart)) {
+                LocalDateTime pauseStart = day.atTime(lunchStart);
+                LocalDateTime pauseEnd = day.atTime(lunchEnd);
+                if (cursor.isBefore(pauseStart)) {
+                    workingIntervals.add(new Interval(cursor, min(sliceEnd, pauseStart)));
+                }
+                if (sliceEnd.isAfter(pauseEnd)) {
+                    workingIntervals.add(new Interval(max(cursor, pauseEnd), sliceEnd));
+                }
+            } else {
+                workingIntervals.add(new Interval(cursor, sliceEnd));
+            }
+
+            LocalDateTime overtimeBoundary = day.atTime(overtimeStart);
+            for (Interval interval : workingIntervals) {
+                if (!interval.end().isAfter(interval.start())) {
+                    continue;
+                }
+                LocalDateTime ordinaryEnd = min(interval.end(), overtimeBoundary);
+                if (ordinaryEnd.isAfter(interval.start())) {
+                    ordinaryMinutes += Duration.between(interval.start(), ordinaryEnd).toMinutes();
+                }
+                LocalDateTime overtimeBegin = max(interval.start(), overtimeBoundary);
+                if (interval.end().isAfter(overtimeBegin)) {
+                    overtimeMinutes += Duration.between(overtimeBegin, interval.end()).toMinutes();
+                }
             }
         }
-        return Math.max(0, minutes) / 60.0;
+        return new WorkSplit(Math.max(0, ordinaryMinutes) / 60.0, Math.max(0, overtimeMinutes) / 60.0);
     }
 
     private LocalTime settingTime(String key, LocalTime fallback) {
@@ -387,12 +432,14 @@ public class ReportServiceImpl implements ReportService {
     private static class OreAgg {
         private Utente utente;
         private double ore = 0.0;
+        private double oreStraordinario = 0.0;
         private long giorniAssenza = 0L;
     }
 
     private static class UserGrid {
         private final Utente user;
         private final Map<String, Map<LocalDate, Double>> hoursByCantiere = new TreeMap<>();
+        private final Map<String, Map<LocalDate, Double>> overtimeByCantiere = new TreeMap<>();
         private long ferieDays = 0L;
         private long malattiaDays = 0L;
 
@@ -400,16 +447,29 @@ public class ReportServiceImpl implements ReportService {
             this.user = user;
         }
 
-        private void addHours(String cantiere, LocalDate day, double hours) {
+        private void addHours(String cantiere, LocalDate day, double ordinaryHours, double overtimeHours) {
             hoursByCantiere.computeIfAbsent(cantiere, k -> new TreeMap<>())
-                    .merge(day, hours, Double::sum);
+                    .merge(day, ordinaryHours, Double::sum);
+            overtimeByCantiere.computeIfAbsent(cantiere, k -> new TreeMap<>())
+                    .merge(day, overtimeHours, Double::sum);
         }
 
-        private double totalHours() {
+        private double totalOrdinaryHours() {
             return hoursByCantiere.values().stream()
                     .flatMap(m -> m.values().stream())
                     .mapToDouble(Double::doubleValue)
                     .sum();
+        }
+
+        private double totalOvertimeHours() {
+            return overtimeByCantiere.values().stream()
+                    .flatMap(m -> m.values().stream())
+                    .mapToDouble(Double::doubleValue)
+                    .sum();
+        }
+
+        private double totalHours() {
+            return totalOrdinaryHours() + totalOvertimeHours();
         }
     }
 
@@ -423,4 +483,6 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private record VehicleUsage(LocalDateTime start, LocalDateTime end, String cantiere, String utilizzatori) {}
+    private record WorkSplit(double ordinary, double overtime) {}
+    private record Interval(LocalDateTime start, LocalDateTime end) {}
 }

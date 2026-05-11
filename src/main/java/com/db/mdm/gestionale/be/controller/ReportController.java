@@ -1,6 +1,7 @@
 package com.db.mdm.gestionale.be.controller;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/report")
 @RequiredArgsConstructor
 public class ReportController {
+    private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     private final ReportService reportService;
 
@@ -39,7 +41,7 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         byte[] file = reportService.exportOreLavorateExcel(from, to);
-        String filename = "report-ore-" + from + "_" + to + ".xlsx";
+        String filename = "report-ore-" + from.format(FILE_DATE) + "_" + to.format(FILE_DATE) + ".xlsx";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

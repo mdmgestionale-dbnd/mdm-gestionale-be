@@ -2,6 +2,7 @@ package com.db.mdm.gestionale.be.service.impl;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.data.domain.Sort;
@@ -32,6 +33,7 @@ public class PermessoServiceImpl implements PermessoService {
     private static final String STATO_IN_ATTESA = "IN_ATTESA";
     private static final String STATO_APPROVATO = "APPROVATO";
     private static final String STATO_RIFIUTATO = "RIFIUTATO";
+    private static final DateTimeFormatter IT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final PermessoRepository repository;
     private final UtenteRepository utenteRepository;
@@ -93,6 +95,7 @@ public class PermessoServiceImpl implements PermessoService {
             removeUserFromOverlappingAssignments(saved);
         }
 
+        closeLeaveRequestNotification(saved);
         createLeaveDecisionNotification(saved, decision.isApprova());
         broadcastPermessoChange(decision.isApprova() ? "approve" : "reject", saved.getId());
         return saved;
@@ -204,7 +207,7 @@ public class PermessoServiceImpl implements PermessoService {
         notifica.setTipo("RICHIESTA_PERMESSO");
         notifica.setTitolo("Nuova richiesta " + permesso.getTipo().toLowerCase());
         notifica.setMessaggio(displayName(permesso.getUtente()) + " ha richiesto " + permesso.getTipo().toLowerCase()
-                + " dal " + permesso.getStartDate() + " al " + permesso.getEndDate() + ".");
+                + " dal " + permesso.getStartDate().format(IT_DATE) + " al " + permesso.getEndDate().format(IT_DATE) + ".");
         notifica.setLivello("WARN");
         notifica.setRiferimentoTipo("PERMESSO");
         notifica.setRiferimentoId(permesso.getId());
@@ -231,6 +234,16 @@ public class PermessoServiceImpl implements PermessoService {
         notifica.setChiaveUnica(key);
         notificaRepository.save(notifica);
         webSocketService.broadcast(Constants.MSG_NOTIFICATION, "{\"entity\":\"notifica\",\"action\":\"new\",\"id\":null}");
+    }
+
+    private void closeLeaveRequestNotification(Permesso permesso) {
+        String key = "PERMESSO:RICHIESTA:" + permesso.getId();
+        notificaRepository.findByChiaveUnica(key).ifPresent(notifica -> {
+            notifica.setLetta(true);
+            notifica.setDeleted(true);
+            notificaRepository.save(notifica);
+            webSocketService.broadcast(Constants.MSG_NOTIFICATION, "{\"entity\":\"notifica\",\"action\":\"leave-request-closed\",\"id\":" + notifica.getId() + "}");
+        });
     }
 
     private String displayName(Utente utente) {

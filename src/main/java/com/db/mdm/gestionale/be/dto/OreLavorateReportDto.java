@@ -19,6 +19,7 @@ public class OreLavorateReportDto {
         private Long utenteId;
         private String nomeCompleto;
         private double oreLavorate;
+        private double oreStraordinario;
         private long giorniAssenzaApprovata;
     }
 }

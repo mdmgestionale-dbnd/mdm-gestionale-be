@@ -1,6 +1,7 @@
 package com.db.mdm.gestionale.be.service.impl;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class NotificaServiceImpl implements NotificaService {
+    private static final DateTimeFormatter IT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final NotificaRepository notificaRepository;
     private final VeicoloRepository veicoloRepository;
@@ -219,7 +221,7 @@ public class NotificaServiceImpl implements NotificaService {
     }
 
     private String buildVehicleDeadlineMessage(String label, String targa, LocalDate scadenza) {
-        return label + " del veicolo " + targa + " con scadenza il " + scadenza + ".";
+        return label + " del veicolo " + targa + " con scadenza il " + scadenza.format(IT_DATE) + ".";
     }
 
     private LocalDate findExtraDeadline(Veicolo veicolo, String tipo) {

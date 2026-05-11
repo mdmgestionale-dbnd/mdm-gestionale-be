@@ -39,10 +39,14 @@ public class VeicoloController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
     public ResponseEntity<Veicolo> update(@PathVariable Long id, @RequestBody Veicolo entity) {
-        if (service.findById(id) == null) {
+        Veicolo existing = service.findById(id);
+        if (existing == null) {
             return ResponseEntity.notFound().build();
         }
         entity.setId(id);
+        entity.setDeleted(existing.isDeleted());
+        entity.setCreatedAt(existing.getCreatedAt());
+        entity.setUpdatedAt(existing.getUpdatedAt());
         return ResponseEntity.ok(service.save(entity));
     }
 

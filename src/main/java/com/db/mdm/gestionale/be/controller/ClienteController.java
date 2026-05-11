@@ -39,11 +39,16 @@ public class ClienteController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SUPERVISORE')")
     public ResponseEntity<Cliente> update(@PathVariable Long id, @RequestBody Cliente entity) {
-        if (service.findById(id) == null) {
+        Cliente existing = service.findById(id);
+        if (existing == null) {
             return ResponseEntity.notFound().build();
         }
-        entity.setId(id);
-        return ResponseEntity.ok(service.save(entity));
+        existing.setNome(entity.getNome());
+        existing.setRiferimento(entity.getRiferimento());
+        existing.setTelefono(entity.getTelefono());
+        existing.setEmail(entity.getEmail());
+        existing.setIndirizzo(entity.getIndirizzo());
+        return ResponseEntity.ok(service.save(existing));
     }
 
     @DeleteMapping("/{id}")

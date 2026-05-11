@@ -62,12 +62,17 @@ public class CantiereServiceImpl implements CantiereService {
     @Override
     public Cantiere updateCantiereWithOptionalFile(Long id, Cantiere payload, MultipartFile file, boolean removeFile) throws Exception {
         Cantiere existing = cantiereRepo.findById(id).orElseThrow(() -> new IllegalArgumentException("Cantiere non trovato"));
-        if (payload.getNome() != null) existing.setNome(payload.getNome());
+        if (payload.getNome() != null) {
+            existing.setNome(payload.getNome());
+        }
         if (payload.getCliente() != null && payload.getCliente().getId() != null) {
             Cliente cli = clienteRepo.findById(payload.getCliente().getId())
                     .orElseThrow(() -> new IllegalArgumentException("Cliente non trovato"));
             existing.setCliente(cli);
         }
+        existing.setDescrizione(null);
+        existing.setIndirizzo(null);
+        existing.setReferente(null);
         Cantiere saved = cantiereRepo.save(existing);
 
         if (removeFile) {
